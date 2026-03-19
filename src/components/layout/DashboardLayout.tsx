@@ -42,7 +42,7 @@ export function DashboardLayout({ title, navItems, children }: DashboardLayoutPr
         <nav className="flex-1 space-y-1 p-3">
           {navItems.map((item) => (
             <Link
-              key={item.path}
+              key={`${item.path}-${item.label}`}
               href={item.path}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
