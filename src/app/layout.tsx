@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ClerkProvider } from "@clerk/nextjs";
+import { shadesOfPurple, neobrutalism } from "@clerk/ui/themes";
 import { cookies } from "next/headers";
 
 const geistSans = Geist({
@@ -31,7 +32,11 @@ export default async function RootLayout({
   const isDark = theme === "dark";
 
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        theme: isDark ? shadesOfPurple : neobrutalism,
+      }}
+    >
       <html lang="en" className={isDark ? "dark" : ""}>
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
