@@ -1,0 +1,206 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enum for user roles
+enum UserRole {
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+// Enum for shipment status
+enum ShipmentStatus {
+  ORDER_CREATED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+}
+
+// Enum for package type
+enum PackageType {
+  DOCUMENT
+  PARCEL
+  FRAGILE
+  ELECTRONICS
+}
+
+// Enum for delivery type
+enum DeliveryType {
+  STANDARD
+  EXPRESS
+}
+
+// Enum for agent status
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  ON_BREAK
+}
+
+// Enum for status update source
+enum StatusUpdateSource {
+  SYSTEM
+  AGENT
+  CUSTOMER
+  ADMIN
+}
+
+// Base User model
+model User {
+  id            String         @id @default(cuid())
+  clerkUserId   String         @unique
+  email         String         @unique
+  name          String
+  firstName     String?
+  lastName      String?
+  phone         String?
+  avatarUrl     String?
+  role          UserRole       @default(CUSTOMER)
+  isActive      Boolean        @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Relations
+  customer      Customer?
+  deliveryAgent DeliveryAgent?
+  shipments     Shipment[]     @relation("CustomerShipments")
+  assignedShipments Shipment[] @relation("AgentShipments")
+  statusUpdates StatusHistory[]
+
+  @@index([clerkUserId])
+  @@index([email])
+  @@index([role])
+}
+
+// Customer profile (extends User)
+model Customer {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address         String
+  addressLine1    String?
+  addressLine2    String?
+  city            String?
+  state           String?
+  postalCode      String?
+  country         String?  @default("India")
+  companyName     String?
+  notes           String?
+  totalShipments  Int      @default(0)
+  joinDate        DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Delivery Agent profile (extends User)
+model DeliveryAgent {
+  id                 String       @id @default(cuid())
+  userId             String       @unique
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone               String
+  vehicleType        String?
+  licenseNumber      String?
+  maxActiveDeliveries Int         @default(5)
+  activeDeliveries   Int          @default(0)
+  completedDeliveries Int         @default(0)
+  rating             Float        @default(0.0)
+  onTimeRate          Float        @default(0.0)
+  lastActiveAt        DateTime?
+  status             AgentStatus  @default(ACTIVE)
+
+  @@index([userId])
+  @@index([zone])
+  @@index([status])
+}
+
+// Shipment model
+model Shipment {
+  id                String          @id @default(cuid())
+  trackingId        String          @unique
+  
+  // Sender information
+  senderName        String
+  senderAddress     String
+  senderPhone       String?
+  senderEmail       String?
+  originCity        String?
+  
+  // Receiver information
+  receiverName      String
+  receiverAddress   String
+  receiverPhone     String?
+  receiverEmail     String?
+  destinationCity   String?
+  
+  // Package details
+  packageWeight     Float
+  packageType       PackageType
+  deliveryType      DeliveryType
+  packageLengthCm   Float?
+  packageWidthCm    Float?
+  packageHeightCm   Float?
+  declaredValue     Float           @default(0)
+  isInsured         Boolean         @default(false)
+  insuranceFee      Float           @default(0)
+  fuelSurcharge     Float           @default(0)
+  taxAmount         Float           @default(0)
+  price             Float           @default(0)  // Base price in INR
+  totalAmount       Float           @default(0)
+  currency          String          @default("INR")
+  
+  // Status and tracking
+  status            ShipmentStatus  @default(ORDER_CREATED)
+  estimatedDelivery DateTime
+  pickupDate        DateTime?
+  deliveredAt       DateTime?
+  deliveryWindowStart DateTime?
+  deliveryWindowEnd DateTime?
+  lastStatusAt      DateTime        @default(now())
+  specialInstructions String?
+  internalNotes     String?
+  
+  // Relations
+  customerId        String?
+  customer          User?           @relation("CustomerShipments", fields: [customerId], references: [id])
+  
+  deliveryAgentId   String?
+  deliveryAgent     User?           @relation("AgentShipments", fields: [deliveryAgentId], references: [id])
+  
+  statusHistory     StatusHistory[]
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([trackingId])
+  @@index([customerId])
+  @@index([deliveryAgentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Status History model
+model StatusHistory {
+  id          String          @id @default(cuid())
+  shipmentId  String
+  shipment    Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  status      ShipmentStatus
+  timestamp   DateTime        @default(now())
+  location    String?
+  source      StatusUpdateSource @default(SYSTEM)
+  updatedBy   String?
+  updater     User?           @relation(fields: [updatedBy], references: [id])
+  notes       String?
+
+  @@index([shipmentId])
+  @@index([timestamp])
+}

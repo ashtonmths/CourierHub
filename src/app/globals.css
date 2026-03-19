@@ -1,0 +1,235 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 215 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 12%;
+
+    --primary: 215 70% 22%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 25% 93%;
+    --secondary-foreground: 215 25% 20%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 215 70% 22%;
+
+    --radius: 0.75rem;
+
+    --success: 142 72% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 200 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 215 70% 18%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 25 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 60% 25%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 50% 28%;
+    --sidebar-ring: 25 95% 53%;
+    --sidebar-muted: 215 40% 35%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(215 70% 18%), hsl(215 60% 30%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 53%), hsl(30 95% 60%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(210 20% 97%));
+
+    --shadow-card: 0 1px 3px hsl(215 25% 12% / 0.06), 0 4px 12px hsl(215 25% 12% / 0.04);
+    --shadow-elevated: 0 4px 6px hsl(215 25% 12% / 0.07), 0 12px 28px hsl(215 25% 12% / 0.09);
+    --shadow-glow: 0 0 20px hsl(25 95% 53% / 0.15);
+  }
+
+  .dark {
+    --background: 215 30% 8%;
+    --foreground: 210 20% 93%;
+
+    --card: 215 28% 12%;
+    --card-foreground: 210 20% 93%;
+
+    --popover: 215 28% 12%;
+    --popover-foreground: 210 20% 93%;
+
+    --primary: 25 95% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 210 20% 90%;
+
+    --muted: 215 20% 16%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 25 95% 53%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 20% 20%;
+    --input: 215 20% 20%;
+    --ring: 25 95% 53%;
+
+    --success: 142 72% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 200 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 215 35% 10%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 25 95% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 30% 16%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 215 25% 18%;
+    --sidebar-ring: 25 95% 53%;
+    --sidebar-muted: 215 20% 30%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(215 35% 10%), hsl(215 30% 16%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 53%), hsl(30 95% 60%));
+    --gradient-card: linear-gradient(145deg, hsl(215 28% 12%), hsl(215 25% 14%));
+
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.2), 0 4px 12px hsl(0 0% 0% / 0.15);
+    --shadow-elevated: 0 4px 6px hsl(0 0% 0% / 0.25), 0 12px 28px hsl(0 0% 0% / 0.2);
+    --shadow-glow: 0 0 20px hsl(25 95% 53% / 0.2);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-accent);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+/* ── Clerk modal centering ─────────────────────────────────────────────────── */
+.cl-modalBackdrop {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+}
+
+/* ── Clerk dark mode overrides ─────────────────────────────────────────────── */
+/* These selectors override Clerk component internals when .dark is on <html> */
+.dark .cl-card {
+  background-color: hsl(215 28% 12%) !important;
+  border-color: hsl(215 20% 20%) !important;
+  box-shadow: 0 4px 6px hsl(0 0% 0% / 0.25), 0 12px 28px hsl(0 0% 0% / 0.2) !important;
+}
+
+.dark .cl-headerTitle,
+.dark .cl-headerSubtitle,
+.dark .cl-bodyText,
+.dark .cl-formFieldLabel,
+.dark .cl-footerActionLink,
+.dark .cl-dividerText,
+.dark .cl-alternativeMethodsBlockButton__text {
+  color: hsl(210 20% 93%) !important;
+}
+
+.dark .cl-footerActionText {
+  color: hsl(215 15% 55%) !important;
+}
+
+.dark .cl-formFieldInput {
+  background-color: hsl(215 20% 16%) !important;
+  border-color: hsl(215 20% 20%) !important;
+  color: hsl(210 20% 93%) !important;
+}
+
+.dark .cl-formFieldInput:focus {
+  border-color: hsl(25 95% 53%) !important;
+  box-shadow: 0 0 0 2px hsl(25 95% 53% / 0.15) !important;
+}
+
+.dark .cl-formButtonPrimary {
+  background-color: hsl(25 95% 53%) !important;
+  color: hsl(0 0% 100%) !important;
+}
+
+.dark .cl-formButtonPrimary:hover {
+  background-color: hsl(25 95% 45%) !important;
+}
+
+.dark .cl-socialButtonsBlockButton {
+  background-color: hsl(215 25% 18%) !important;
+  border-color: hsl(215 20% 20%) !important;
+  color: hsl(210 20% 93%) !important;
+}
+
+.dark .cl-socialButtonsBlockButton:hover {
+  background-color: hsl(215 20% 22%) !important;
+}
+
+.dark .cl-dividerLine {
+  background-color: hsl(215 20% 20%) !important;
+}
+
+.dark .cl-modalCloseButton {
+  color: hsl(215 15% 55%) !important;
+}
+
+.dark .cl-modalCloseButton:hover {
+  color: hsl(210 20% 93%) !important;
+}
+
+.dark .cl-internal-b3fm6y {
+  background-color: hsl(215 35% 10%) !important;
+}
