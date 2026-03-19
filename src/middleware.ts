@@ -31,23 +31,50 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // Get user role from session claims (stored in Clerk public metadata)
-  const role = (sessionClaims?.publicMetadata as { role?: string })?.role
+  let role = (sessionClaims?.publicMetadata as { role?: string })?.role
+
+  const syncRoleFromDb = async () => {
+    const syncUrl = new URL('/api/role-sync', req.url)
+    const res = await fetch(syncUrl, {
+      headers: {
+        cookie: req.headers.get('cookie') || '',
+      },
+    })
+
+    if (!res.ok) return role
+
+    const data = (await res.json()) as { role?: string | null }
+    return data.role || role
+  }
 
   // Check admin routes
+  if (isAdminRoute(req)) {
+    role = await syncRoleFromDb()
+  }
+
   if (isAdminRoute(req) && role !== 'ADMIN') {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
   // Check agent routes
+  if (isAgentRoute(req)) {
+    role = await syncRoleFromDb()
+  }
+
   if (isAgentRoute(req) && role !== 'AGENT' && role !== 'ADMIN') {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
   // Check customer routes
+  if (isCustomerRoute(req)) {
+    role = await syncRoleFromDb()
+  }
+
+  if (isCustomerRoute(req) && !role) {
+    return NextResponse.next()
+  }
+
   if (isCustomerRoute(req) && role !== 'CUSTOMER' && role !== 'ADMIN') {
-    if (!role) {
-      return NextResponse.next()
-    }
     return NextResponse.redirect(new URL('/', req.url))
   }
 

@@ -300,8 +300,8 @@ export async function createShipment(data: {
       },
     })
 
-    await tx.customer.update({
-      where: { userId: customerId },
+    await tx.user.update({
+      where: { id: customerId },
       data: { totalShipments: { increment: 1 } },
     })
 
@@ -365,8 +365,8 @@ export async function updateShipmentStatus(
     const isDelivered = status === ShipmentStatus.DELIVERED
 
     if (existing.deliveryAgentId && wasDelivered !== isDelivered) {
-      await tx.deliveryAgent.update({
-        where: { userId: existing.deliveryAgentId },
+      await tx.user.update({
+        where: { id: existing.deliveryAgentId },
         data: {
           activeDeliveries: isDelivered ? { decrement: 1 } : { increment: 1 },
           completedDeliveries: isDelivered ? { increment: 1 } : { decrement: 1 },
@@ -416,15 +416,15 @@ export async function assignAgentToShipment(
 
     if (isActive && agentChanged) {
       if (existing.deliveryAgentId) {
-        await tx.deliveryAgent.update({
-          where: { userId: existing.deliveryAgentId },
+        await tx.user.update({
+          where: { id: existing.deliveryAgentId },
           data: { activeDeliveries: { decrement: 1 } },
         })
       }
 
       if (normalizedAgentId) {
-        await tx.deliveryAgent.update({
-          where: { userId: normalizedAgentId },
+        await tx.user.update({
+          where: { id: normalizedAgentId },
           data: { activeDeliveries: { increment: 1 } },
         })
       }

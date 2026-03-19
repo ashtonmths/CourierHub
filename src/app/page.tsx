@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Package, MapPin, Shield, Zap, ArrowRight, Truck, Globe, Mail, Phone, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 
 const features = [
@@ -21,13 +22,31 @@ const pricing = [
 
 const Index = () => {
   const { isSignedIn, user } = useUser();
-  
-  // Get user role from Clerk metadata
-  const userRole = user?.publicMetadata?.role as string | undefined;
+
+  const [resolvedRole, setResolvedRole] = useState<string | undefined>(
+    user?.publicMetadata?.role as string | undefined
+  );
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const loadRole = async () => {
+      try {
+        const res = await fetch('/api/role-sync', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as { role?: string | null };
+        setResolvedRole(data.role || (user?.publicMetadata?.role as string | undefined));
+      } catch {
+        setResolvedRole(user?.publicMetadata?.role as string | undefined);
+      }
+    };
+
+    loadRole();
+  }, [isSignedIn, user?.publicMetadata]);
   
   // Get dashboard URL based on role
   const getDashboardUrl = () => {
-    switch (userRole) {
+    switch (isSignedIn ? resolvedRole : undefined) {
       case 'ADMIN':
         return '/admin';
       case 'AGENT':

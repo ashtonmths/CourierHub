@@ -9,8 +9,6 @@ async function main() {
   console.log('🗑️  Clearing all data from database...')
   await prisma.statusHistory.deleteMany()
   await prisma.shipment.deleteMany()
-  await prisma.customer.deleteMany()
-  await prisma.deliveryAgent.deleteMany()
   await prisma.user.deleteMany()
   console.log('✅ Database cleared successfully — all tables are empty.')
 }

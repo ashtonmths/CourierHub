@@ -22,10 +22,6 @@ export async function getCurrentUser() {
 
   const dbUser = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.id },
-    include: {
-      customer: true,
-      deliveryAgent: true,
-    },
   })
 
   return dbUser
@@ -92,33 +88,23 @@ export async function syncClerkUserToDatabase(
     },
   })
 
-  // Create customer profile if role is CUSTOMER and doesn't exist
   if (userRole === UserRole.CUSTOMER) {
-    await prisma.customer.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: {
-        userId: user.id,
-        address: 'Not provided',
-        totalShipments: 0,
-        joinDate: new Date(),
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        address: user.address || 'Not provided',
+        joinDate: user.joinDate || new Date(),
       },
     })
   }
 
-  // Create agent profile if role is AGENT and doesn't exist
   if (userRole === UserRole.AGENT) {
-    await prisma.deliveryAgent.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: {
-        userId: user.id,
-        zone: 'Unassigned',
-        activeDeliveries: 0,
-        completedDeliveries: 0,
-        rating: 0,
-        status: AgentStatus.ACTIVE,
-        maxActiveDeliveries: 5,
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        zone: user.zone || 'Unassigned',
+        status: user.status || AgentStatus.ACTIVE,
+        maxActiveDeliveries: user.maxActiveDeliveries || 5,
       },
     })
   }

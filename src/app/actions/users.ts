@@ -13,10 +13,6 @@ export async function getAllUsers() {
   if (!user) throw new Error('Unauthorized')
 
   const users = await prisma.user.findMany({
-    include: {
-      customer: true,
-      deliveryAgent: true,
-    },
     orderBy: {
       createdAt: 'desc',
     },
@@ -37,7 +33,6 @@ export async function getAllCustomers() {
       role: UserRole.CUSTOMER,
     },
     include: {
-      customer: true,
       shipments: {
         select: {
           id: true,
@@ -66,7 +61,6 @@ export async function getAllAgents() {
       role: UserRole.AGENT,
     },
     include: {
-      deliveryAgent: true,
       assignedShipments: {
         where: {
           status: {
@@ -99,10 +93,6 @@ export async function getCurrentUserProfile() {
     where: {
       clerkUserId: user.id,
     },
-    include: {
-      customer: true,
-      deliveryAgent: true,
-    },
   })
 
   if (!dbUser) {
@@ -118,10 +108,6 @@ export async function getCurrentUserProfile() {
     dbUser = await prisma.user.findUnique({
       where: {
         id: synced.id,
-      },
-      include: {
-        customer: true,
-        deliveryAgent: true,
       },
     })
   }
@@ -153,22 +139,17 @@ export async function updateUserRole(userId: string, newRole: UserRole) {
 
   // Create or update profile based on new role
   if (newRole === UserRole.CUSTOMER) {
-    await prisma.customer.upsert({
-      where: { userId },
-      update: {},
-      create: {
-        userId,
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
         address: 'Not provided',
-        totalShipments: 0,
         joinDate: new Date(),
       },
     })
   } else if (newRole === UserRole.AGENT) {
-    await prisma.deliveryAgent.upsert({
-      where: { userId },
-      update: {},
-      create: {
-        userId,
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
         zone: 'Unassigned',
         activeDeliveries: 0,
         completedDeliveries: 0,
@@ -206,8 +187,8 @@ export async function updateAgentProfile(
   const user = await currentUser()
   if (!user) throw new Error('Unauthorized')
 
-  const agent = await prisma.deliveryAgent.update({
-    where: { userId: agentId },
+  const agent = await prisma.user.update({
+    where: { id: agentId },
     data,
   })
 
@@ -231,8 +212,8 @@ export async function getUserStats() {
     prisma.user.count({
       where: { role: UserRole.AGENT },
     }),
-    prisma.deliveryAgent.count({
-      where: { status: 'ACTIVE' },
+    prisma.user.count({
+      where: { role: UserRole.AGENT, status: 'ACTIVE' },
     }),
   ])
 

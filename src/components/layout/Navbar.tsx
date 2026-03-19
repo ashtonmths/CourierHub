@@ -5,19 +5,37 @@ import { usePathname } from "next/navigation";
 import { Package, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useUser, SignInButton, UserButton } from "@clerk/nextjs";
 
 export function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isSignedIn, user } = useUser();
-  
-  // Get user role from Clerk metadata
-  const userRole = user?.publicMetadata?.role as string | undefined;
+
+  const [resolvedRole, setResolvedRole] = useState<string | undefined>(
+    user?.publicMetadata?.role as string | undefined
+  );
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const loadRole = async () => {
+      try {
+        const res = await fetch('/api/role-sync', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as { role?: string | null };
+        setResolvedRole(data.role || (user?.publicMetadata?.role as string | undefined));
+      } catch {
+        setResolvedRole(user?.publicMetadata?.role as string | undefined);
+      }
+    };
+
+    loadRole();
+  }, [isSignedIn, user?.publicMetadata]);
 
   const getDashboardUrl = () => {
-    switch (userRole) {
+    switch (isSignedIn ? resolvedRole : undefined) {
       case "ADMIN":
         return "/admin";
       case "AGENT":
@@ -43,7 +61,7 @@ export function Navbar() {
     
     // Show protected links only to authenticated users with correct role
     if (isSignedIn && link.roles) {
-      return link.roles.includes(userRole || "");
+      return link.roles.includes(resolvedRole || "");
     }
     
     return false;

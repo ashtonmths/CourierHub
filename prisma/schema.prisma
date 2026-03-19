@@ -67,12 +67,31 @@ model User {
   role          UserRole       @default(CUSTOMER)
   isActive      Boolean        @default(true)
   lastLoginAt   DateTime?
+  address       String?
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  state         String?
+  postalCode    String?
+  country       String?        @default("India")
+  companyName   String?
+  notes         String?
+  totalShipments Int           @default(0)
+  joinDate      DateTime       @default(now())
+  zone          String?
+  vehicleType   String?
+  licenseNumber String?
+  maxActiveDeliveries Int      @default(5)
+  activeDeliveries   Int       @default(0)
+  completedDeliveries Int      @default(0)
+  rating        Float          @default(0.0)
+  onTimeRate    Float          @default(0.0)
+  lastActiveAt  DateTime?
+  status        AgentStatus    @default(ACTIVE)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   
   // Relations
-  customer      Customer?
-  deliveryAgent DeliveryAgent?
   shipments     Shipment[]     @relation("CustomerShipments")
   assignedShipments Shipment[] @relation("AgentShipments")
   statusUpdates StatusHistory[]
@@ -80,47 +99,8 @@ model User {
   @@index([clerkUserId])
   @@index([email])
   @@index([role])
-}
-
-// Customer profile (extends User)
-model Customer {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  address         String
-  addressLine1    String?
-  addressLine2    String?
-  city            String?
-  state           String?
-  postalCode      String?
-  country         String?  @default("India")
-  companyName     String?
-  notes           String?
-  totalShipments  Int      @default(0)
-  joinDate        DateTime @default(now())
-
-  @@index([userId])
-}
-
-// Delivery Agent profile (extends User)
-model DeliveryAgent {
-  id                 String       @id @default(cuid())
-  userId             String       @unique
-  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  zone               String
-  vehicleType        String?
-  licenseNumber      String?
-  maxActiveDeliveries Int         @default(5)
-  activeDeliveries   Int          @default(0)
-  completedDeliveries Int         @default(0)
-  rating             Float        @default(0.0)
-  onTimeRate          Float        @default(0.0)
-  lastActiveAt        DateTime?
-  status             AgentStatus  @default(ACTIVE)
-
-  @@index([userId])
-  @@index([zone])
   @@index([status])
+  @@index([zone])
 }
 
 // Shipment model

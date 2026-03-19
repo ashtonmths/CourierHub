@@ -229,9 +229,9 @@ export default function AdminDashboard() {
                     <td className="px-4 py-3 font-medium">{c.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.email}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.phone || 'N/A'}</td>
-                    <td className="px-4 py-3 font-semibold">{c.customer?.totalShipments || 0}</td>
+                    <td className="px-4 py-3 font-semibold">{c.totalShipments || 0}</td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {c.customer?.joinDate ? format(new Date(c.customer.joinDate), 'MMM dd, yyyy') : 'N/A'}
+                      {c.joinDate ? format(new Date(c.joinDate), 'MMM dd, yyyy') : 'N/A'}
                     </td>
                   </tr>
                 ))}
@@ -253,26 +253,26 @@ export default function AdminDashboard() {
                   <h4 className="font-display font-semibold">{a.name}</h4>
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      a.deliveryAgent?.status === 'ACTIVE'
+                      a.status === 'ACTIVE'
                         ? 'bg-success/15 text-success'
                         : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {a.deliveryAgent?.status || 'INACTIVE'}
+                      {a.status || 'INACTIVE'}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{a.deliveryAgent?.zone || 'Unassigned'}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{a.zone || 'Unassigned'}</p>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-muted p-2">
-                    <p className="font-bold text-foreground">{a.deliveryAgent?.activeDeliveries || 0}</p>
+                      <p className="font-bold text-foreground">{a.activeDeliveries || 0}</p>
                     <p className="text-muted-foreground">Active</p>
                   </div>
                   <div className="rounded-lg bg-muted p-2">
-                    <p className="font-bold text-foreground">{a.deliveryAgent?.completedDeliveries || 0}</p>
+                      <p className="font-bold text-foreground">{a.completedDeliveries || 0}</p>
                     <p className="text-muted-foreground">Done</p>
                   </div>
                   <div className="rounded-lg bg-muted p-2">
-                    <p className="font-bold text-foreground">{a.deliveryAgent?.rating?.toFixed(1) || '0.0'}</p>
+                      <p className="font-bold text-foreground">{a.rating?.toFixed(1) || '0.0'}</p>
                     <p className="text-muted-foreground">Rating</p>
                   </div>
                 </div>
