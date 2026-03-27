@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
@@ -9,23 +9,22 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Package, Copy, Check, Info, AlertTriangle, ChevronDown, ChevronUp, Truck, Zap,
+  Package, Copy, Check, Info, AlertTriangle, ChevronDown, ChevronUp,
+  Truck, Zap, MapPin,
 } from "lucide-react";
 import { createShipment, syncCurrentUser } from "@/app/actions/shipments";
 import { PackageType, DeliveryType } from "@prisma/client";
 import { toast } from "sonner";
 import {
-  WEIGHT_LIMITS,
-  WEIGHT_TIERS,
-  PACKAGE_TYPE_MULTIPLIER,
-  DELIVERY_TYPE_MULTIPLIER,
-  PACKAGE_TYPE_LABELS,
-  PACKAGE_TYPE_ICONS,
-  calculatePrice,
-  validateWeight,
+  WEIGHT_LIMITS, WEIGHT_TIERS, PACKAGE_TYPE_MULTIPLIER, DELIVERY_TYPE_MULTIPLIER,
+  PACKAGE_TYPE_LABELS, PACKAGE_TYPE_ICONS, calculatePrice, validateWeight,
 } from "@/lib/pricing";
+import type { LocationResult } from "@/components/LocationPicker";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// Lazy-load the map (Leaflet requires window/document)
+const LocationPicker = lazy(() => import("@/components/LocationPicker"));
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type FormState = {
   senderName: string;
@@ -46,16 +45,16 @@ export default function CreateShipment() {
   const router = useRouter();
 
   const [form, setForm] = useState<FormState>({
-    senderName: "",
-    senderAddress: "",
-    senderPhone: "",
-    receiverName: "",
-    receiverAddress: "",
-    receiverPhone: "",
-    packageWeight: "",
-    packageType: "PARCEL",
-    deliveryType: "STANDARD",
+    senderName: "", senderAddress: "", senderPhone: "",
+    receiverName: "", receiverAddress: "", receiverPhone: "",
+    packageWeight: "", packageType: "PARCEL", deliveryType: "STANDARD",
   });
+
+  // Map locations
+  const [senderLocation, setSenderLocation] = useState<LocationResult | undefined>();
+  const [receiverLocation, setReceiverLocation] = useState<LocationResult | undefined>();
+  const [showSenderMap, setShowSenderMap] = useState(false);
+  const [showReceiverMap, setShowReceiverMap] = useState(false);
 
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
@@ -76,7 +75,19 @@ export default function CreateShipment() {
   const update = (field: keyof FormState, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
-  // ── Derived pricing & validation ──────────────────────────────────────────
+  // When a sender location is picked from the map, populate the address field
+  const handleSenderLocation = (loc: LocationResult) => {
+    setSenderLocation(loc);
+    update("senderAddress", loc.address);
+  };
+
+  // When a receiver location is picked from the map, populate the address field
+  const handleReceiverLocation = (loc: LocationResult) => {
+    setReceiverLocation(loc);
+    update("receiverAddress", loc.address);
+  };
+
+  // ── Pricing / validation ──────────────────────────────────────────────────
 
   const weightNum = parseFloat(form.packageWeight) || 0;
   const limit = WEIGHT_LIMITS[form.packageType];
@@ -93,21 +104,14 @@ export default function CreateShipment() {
   }, [form.packageWeight, weightNum, form.packageType, form.deliveryType, weightValidation]);
 
   const filled =
-    form.senderName &&
-    form.senderPhone &&
-    form.senderAddress &&
-    form.receiverName &&
-    form.receiverPhone &&
-    form.receiverAddress &&
-    form.packageWeight &&
-    weightValidation?.valid;
+    form.senderName && form.senderPhone && form.senderAddress &&
+    form.receiverName && form.receiverPhone && form.receiverAddress &&
+    form.packageWeight && weightValidation?.valid;
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleCreateShipment = async () => {
     if (!filled) { toast.error("Please fill in all required fields"); return; }
-    if (!weightValidation?.valid) { toast.error(weightValidation?.message); return; }
-
     setLoading(true);
     try {
       const shipment = await createShipment({
@@ -120,24 +124,22 @@ export default function CreateShipment() {
         packageWeight: weightNum,
         packageType: form.packageType,
         deliveryType: form.deliveryType,
+        originCity: senderLocation?.city,
+        destinationCity: receiverLocation?.city,
       });
       setTrackingId(shipment.trackingId);
       setFinalPrice(shipment.price);
       toast.success("Shipment created successfully!");
     } catch (error) {
       console.error("Error creating shipment:", error);
-      toast.error("Failed to create shipment");
+      toast.error(error instanceof Error ? error.message : "Failed to create shipment");
     } finally {
       setLoading(false);
     }
   };
 
   const copyId = () => {
-    if (trackingId) {
-      navigator.clipboard.writeText(trackingId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    if (trackingId) { navigator.clipboard.writeText(trackingId); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -150,15 +152,13 @@ export default function CreateShipment() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="font-display text-3xl font-bold">Create Shipment</h1>
           <p className="mt-2 text-muted-foreground">
-            Fill in the details below. Prices are calculated based on weight, package type, and delivery speed.
+            Fill in the details below. Click on the map to auto-fill addresses.
           </p>
         </motion.div>
 
         {/* Pricing Info Accordion */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="mt-6 rounded-xl border border-accent/30 bg-accent/5 overflow-hidden"
         >
           <button
@@ -166,8 +166,7 @@ export default function CreateShipment() {
             className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-medium text-foreground hover:bg-accent/10 transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Info className="h-4 w-4 text-accent" />
-              Pricing & Weight Limits Guide
+              <Info className="h-4 w-4 text-accent" /> Pricing & Weight Limits Guide
             </span>
             {showPricingInfo ? <ChevronUp className="h-4 w-4 text-accent" /> : <ChevronDown className="h-4 w-4 text-accent" />}
           </button>
@@ -175,11 +174,8 @@ export default function CreateShipment() {
           <AnimatePresence>
             {showPricingInfo && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
+                initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden"
               >
                 <div className="px-5 pb-5 pt-1 grid gap-6 lg:grid-cols-2">
                   {/* Package type limits */}
@@ -192,10 +188,7 @@ export default function CreateShipment() {
                         const l = WEIGHT_LIMITS[type];
                         const mul = PACKAGE_TYPE_MULTIPLIER[type];
                         return (
-                          <div
-                            key={type}
-                            className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm"
-                          >
+                          <div key={type} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-sm">
                             <span className="flex items-center gap-2">
                               <span>{PACKAGE_TYPE_ICONS[type]}</span>
                               <span className="font-medium">{PACKAGE_TYPE_LABELS[type]}</span>
@@ -224,8 +217,8 @@ export default function CreateShipment() {
                         <thead>
                           <tr className="border-b bg-muted/50">
                             <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Weight</th>
-                            <th className="px-3 py-2 text-right font-semibold text-muted-foreground flex items-center justify-end gap-1">
-                              <Truck className="h-3 w-3" /> Standard
+                            <th className="px-3 py-2 text-right font-semibold text-muted-foreground">
+                              <span className="flex items-center justify-end gap-1"><Truck className="h-3 w-3" /> Standard</span>
                             </th>
                             <th className="px-3 py-2 text-right font-semibold text-muted-foreground">
                               <span className="flex items-center justify-end gap-1"><Zap className="h-3 w-3 text-accent" /> Express</span>
@@ -259,50 +252,143 @@ export default function CreateShipment() {
         <div className="mt-8 grid gap-8 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
 
-            {/* Sender */}
+            {/* ── Sender ─────────────────────────────────────────────────── */}
             <div className="rounded-xl border bg-card p-6 shadow-card">
-              <h3 className="font-display text-lg font-semibold">Sender Details</h3>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-lg font-semibold">Sender Details</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowSenderMap((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    showSenderMap ? "border-accent bg-accent/10 text-accent" : "hover:bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  {showSenderMap ? "Hide Map" : "Pick on Map"}
+                </button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label>Sender Name <span className="text-destructive">*</span></Label>
                   <Input className="mt-1" value={form.senderName} onChange={(e) => update("senderName", e.target.value)} placeholder="Rahul Verma" />
                 </div>
                 <div>
                   <Label>Sender Phone <span className="text-destructive">*</span></Label>
-                  <Input className="mt-1" value={form.senderPhone} onChange={(e) => update("senderPhone", e.target.value)} placeholder="+91-98765-10000" />
+                  <Input
+                    className="mt-1"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={form.senderPhone}
+                    onChange={(e) => update("senderPhone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Sender Address <span className="text-destructive">*</span></Label>
-                  <Input className="mt-1" value={form.senderAddress} onChange={(e) => update("senderAddress", e.target.value)} placeholder="22 MG Road, Indiranagar, Bengaluru" />
+                  <Input
+                    className="mt-1"
+                    value={form.senderAddress}
+                    onChange={(e) => { update("senderAddress", e.target.value); setSenderLocation(undefined); }}
+                    placeholder="22 MG Road, Indiranagar, Bengaluru"
+                  />
                 </div>
               </div>
+
+              {/* Sender map */}
+              <AnimatePresence>
+                {showSenderMap && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }}
+                    className="overflow-hidden mt-4"
+                  >
+                    <Suspense fallback={<div className="h-[260px] rounded-xl border bg-muted animate-pulse" />}>
+                      <LocationPicker
+                        label="Pick sender location"
+                        value={senderLocation}
+                        onSelect={handleSenderLocation}
+                      />
+                    </Suspense>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Receiver */}
+            {/* ── Receiver ───────────────────────────────────────────────── */}
             <div className="rounded-xl border bg-card p-6 shadow-card">
-              <h3 className="font-display text-lg font-semibold">Receiver Details</h3>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-lg font-semibold">Receiver Details</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowReceiverMap((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    showReceiverMap ? "border-accent bg-accent/10 text-accent" : "hover:bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  {showReceiverMap ? "Hide Map" : "Pick on Map"}
+                </button>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <Label>Receiver Name <span className="text-destructive">*</span></Label>
                   <Input className="mt-1" value={form.receiverName} onChange={(e) => update("receiverName", e.target.value)} placeholder="Ananya Iyer" />
                 </div>
                 <div>
                   <Label>Receiver Phone <span className="text-destructive">*</span></Label>
-                  <Input className="mt-1" value={form.receiverPhone} onChange={(e) => update("receiverPhone", e.target.value)} placeholder="+91-98765-20000" />
+                  <Input
+                    className="mt-1"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={form.receiverPhone}
+                    onChange={(e) => update("receiverPhone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="10-digit mobile number"
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Receiver Address <span className="text-destructive">*</span></Label>
-                  <Input className="mt-1" value={form.receiverAddress} onChange={(e) => update("receiverAddress", e.target.value)} placeholder="14 Park Street, Kolkata" />
+                  <Input
+                    className="mt-1"
+                    value={form.receiverAddress}
+                    onChange={(e) => { update("receiverAddress", e.target.value); setReceiverLocation(undefined); }}
+                    placeholder="14 Park Street, Kolkata"
+                  />
                 </div>
               </div>
+
+              {/* Receiver map */}
+              <AnimatePresence>
+                {showReceiverMap && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }}
+                    className="overflow-hidden mt-4"
+                  >
+                    <Suspense fallback={<div className="h-[260px] rounded-xl border bg-muted animate-pulse" />}>
+                      <LocationPicker
+                        label="Pick receiver location"
+                        value={receiverLocation}
+                        onSelect={handleReceiverLocation}
+                        defaultCenter={
+                          senderLocation
+                            ? [senderLocation.lat, senderLocation.lng]
+                            : [20.5937, 78.9629]
+                        }
+                      />
+                    </Suspense>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Package */}
+            {/* ── Package ─────────────────────────────────────────────────── */}
             <div className="rounded-xl border bg-card p-6 shadow-card">
-              <h3 className="font-display text-lg font-semibold">Package Details</h3>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
-
-                {/* Package type */}
+              <h3 className="font-display text-lg font-semibold mb-4">Package Details</h3>
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <Label>Package Type <span className="text-destructive">*</span></Label>
                   <select
@@ -310,16 +396,13 @@ export default function CreateShipment() {
                     value={form.packageType}
                     onChange={(e) => {
                       update("packageType", e.target.value);
-                      // Clear weight if it now violates new type limit
                       const newLimit = WEIGHT_LIMITS[e.target.value as PackageType];
                       const w = parseFloat(form.packageWeight);
                       if (!isNaN(w) && w > newLimit.max) update("packageWeight", "");
                     }}
                   >
                     {(Object.keys(WEIGHT_LIMITS) as PackageType[]).map((t) => (
-                      <option key={t} value={t}>
-                        {PACKAGE_TYPE_ICONS[t]} {PACKAGE_TYPE_LABELS[t]}
-                      </option>
+                      <option key={t} value={t}>{PACKAGE_TYPE_ICONS[t]} {PACKAGE_TYPE_LABELS[t]}</option>
                     ))}
                   </select>
                   <p className="mt-1.5 text-xs text-muted-foreground">
@@ -329,7 +412,6 @@ export default function CreateShipment() {
                   </p>
                 </div>
 
-                {/* Delivery type */}
                 <div>
                   <Label>Delivery Type <span className="text-destructive">*</span></Label>
                   <select
@@ -345,37 +427,25 @@ export default function CreateShipment() {
                   </p>
                 </div>
 
-                {/* Weight */}
                 <div>
                   <Label>Weight (kg) <span className="text-destructive">*</span></Label>
                   <Input
-                    className={`mt-1 ${weightValidation && !weightValidation.valid ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                    className={`mt-1 ${weightValidation && !weightValidation.valid ? "border-destructive" : ""}`}
                     type="number"
                     value={form.packageWeight}
                     onChange={(e) => update("packageWeight", e.target.value)}
                     placeholder={`0.1 – ${limit.max}`}
-                    min={limit.min}
-                    max={limit.max}
-                    step="0.1"
+                    min={limit.min} max={limit.max} step="0.1"
                   />
                   <AnimatePresence mode="wait">
                     {weightValidation && !weightValidation.valid ? (
-                      <motion.p
-                        key="error"
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="mt-1.5 flex items-center gap-1 text-xs text-destructive"
-                      >
+                      <motion.p key="err" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                        className="mt-1.5 flex items-center gap-1 text-xs text-destructive">
                         <AlertTriangle className="h-3 w-3" /> {weightValidation.message}
                       </motion.p>
                     ) : (
-                      <motion.p
-                        key="hint"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="mt-1.5 text-xs text-muted-foreground"
-                      >
+                      <motion.p key="hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        className="mt-1.5 text-xs text-muted-foreground">
                         Allowed: {limit.min}–{limit.max} kg
                       </motion.p>
                     )}
@@ -383,15 +453,11 @@ export default function CreateShipment() {
                 </div>
               </div>
 
-              {/* Live price preview inside the package card */}
+              {/* Live price inside package card */}
               <AnimatePresence>
                 {estimatedPrice !== null && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="mt-5 flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    className="mt-5 flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
                     <span className="text-sm text-muted-foreground">Estimated price</span>
                     <span className="text-xl font-bold text-accent">₹{estimatedPrice.toLocaleString("en-IN")}</span>
                   </motion.div>
@@ -410,20 +476,24 @@ export default function CreateShipment() {
             </Button>
           </div>
 
-          {/* Sidebar Summary */}
+          {/* ── Sidebar ─────────────────────────────────────────────────── */}
           <div className="lg:col-span-1">
             <div className="sticky top-24 space-y-4">
 
               {/* Order summary */}
               <div className="rounded-xl border bg-card p-6 shadow-card">
-                <h3 className="font-display text-lg font-semibold">Order Summary</h3>
-                <div className="mt-4 space-y-3 text-sm">
+                <h3 className="font-display text-base font-semibold mb-4">Order Summary</h3>
+                <div className="space-y-3 text-sm">
                   <Row label="Sender" value={form.senderName || "—"} />
-                  <Row label="Phone" value={form.senderPhone || "—"} />
+                  <Row label="Sender Phone" value={form.senderPhone || "—"} />
+                  {senderLocation && (
+                    <Row label="Origin city" value={senderLocation.city || senderLocation.state || "—"} />
+                  )}
                   <Row label="Receiver" value={form.receiverName || "—"} />
-                  <Row label="Phone" value={form.receiverPhone || "—"} />
-                  <Row label="From" value={form.senderAddress || "—"} />
-                  <Row label="To" value={form.receiverAddress || "—"} />
+                  <Row label="Receiver Phone" value={form.receiverPhone || "—"} />
+                  {receiverLocation && (
+                    <Row label="Dest. city" value={receiverLocation.city || receiverLocation.state || "—"} />
+                  )}
                   <Row label="Weight" value={form.packageWeight ? `${form.packageWeight} kg` : "—"} />
                   <Row label="Type" value={PACKAGE_TYPE_LABELS[form.packageType]} />
                   <Row label="Delivery" value={form.deliveryType === "EXPRESS" ? "⚡ Express" : "🚚 Standard"} />
@@ -439,11 +509,8 @@ export default function CreateShipment() {
                 {/* Success state */}
                 <AnimatePresence>
                   {trackingId && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="mt-6 rounded-lg bg-success/10 p-4"
-                    >
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                      className="mt-6 rounded-lg bg-success/10 p-4">
                       <p className="text-xs font-medium text-success">Shipment Created!</p>
                       <div className="mt-1 flex items-center justify-between">
                         <p className="font-mono text-lg font-bold text-success">{trackingId}</p>
@@ -462,10 +529,10 @@ export default function CreateShipment() {
                 </AnimatePresence>
               </div>
 
-              {/* Quick pricing reference */}
+              {/* Quick reference */}
               <div className="rounded-xl border bg-card p-5 shadow-card">
                 <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Info className="h-4 w-4 text-accent" /> Quick Reference
+                  <Info className="h-4 w-4 text-accent" /> Package Types
                 </h4>
                 <div className="space-y-2 text-xs text-muted-foreground">
                   {(Object.keys(WEIGHT_LIMITS) as PackageType[]).map((t) => (
