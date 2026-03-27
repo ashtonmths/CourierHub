@@ -252,13 +252,14 @@ export async function createShipment(data: {
   const estimatedDelivery = data.estimatedDelivery ||
     new Date(Date.now() + (data.deliveryType === DeliveryType.EXPRESS ? 2 : 5) * 24 * 60 * 60 * 1000)
 
-  // Create shipment
-  const basePrice = data.deliveryType === DeliveryType.EXPRESS ? 450 : 250
-  const weightCharge = Math.max(0, data.packageWeight - 1) * 40
-  const fuelSurcharge = 0.08 * (basePrice + weightCharge)
-  const taxAmount = 0.05 * (basePrice + weightCharge + fuelSurcharge)
-  const insuranceFee = data.isInsured ? 60 : 0
-  const totalAmount = basePrice + weightCharge + fuelSurcharge + taxAmount + insuranceFee
+  // Validate weight against package type limits
+  const { validateWeight, calculatePrice } = await import('@/lib/pricing')
+  const weightCheck = validateWeight(data.packageWeight, data.packageType)
+  if (!weightCheck.valid) throw new Error(weightCheck.message)
+
+  // Calculate price using the shared pricing config (keeps UI and DB in sync)
+  const price = calculatePrice(data.packageWeight, data.packageType, data.deliveryType)
+
 
   const shipment = await prisma.$transaction(async (tx) => {
     const created = await tx.shipment.create({
@@ -279,11 +280,11 @@ export async function createShipment(data: {
         deliveryType: data.deliveryType,
         declaredValue: data.declaredValue ?? 0,
         isInsured: data.isInsured ?? false,
-        insuranceFee,
-        fuelSurcharge,
-        taxAmount,
-        price: basePrice + weightCharge,
-        totalAmount,
+        insuranceFee: 0,
+        fuelSurcharge: 0,
+        taxAmount: 0,
+        price,
+        totalAmount: price,
         status: ShipmentStatus.ORDER_CREATED,
         estimatedDelivery,
         customerId,
