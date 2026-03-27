@@ -60,6 +60,7 @@ export default function CreateShipment() {
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'idle'|'creating-order'|'checkout'|'verifying'|'done'>('idle');
   const [showPricingInfo, setShowPricingInfo] = useState(false);
 
   // Auth guard
@@ -108,32 +109,114 @@ export default function CreateShipment() {
     form.receiverName && form.receiverPhone && form.receiverAddress &&
     form.packageWeight && weightValidation?.valid;
 
-  // ── Submit ────────────────────────────────────────────────────────────────
-
-  const handleCreateShipment = async () => {
+  // ── Razorpay payment flow ─────────────────────────────────────────────────
+  const handlePayAndCreate = async () => {
     if (!filled) { toast.error("Please fill in all required fields"); return; }
+    if (!estimatedPrice) { toast.error("Could not calculate price"); return; }
+
     setLoading(true);
+    setPaymentStep('creating-order');
+
     try {
-      const shipment = await createShipment({
-        senderName: form.senderName,
-        senderAddress: form.senderAddress,
-        senderPhone: form.senderPhone || undefined,
-        receiverName: form.receiverName,
-        receiverAddress: form.receiverAddress,
-        receiverPhone: form.receiverPhone || undefined,
-        packageWeight: weightNum,
-        packageType: form.packageType,
-        deliveryType: form.deliveryType,
-        originCity: senderLocation?.city,
-        destinationCity: receiverLocation?.city,
+      // Step 1 — Create Razorpay order server-side
+      const orderRes = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: estimatedPrice, receipt: `rcpt_${Date.now()}` }),
       });
-      setTrackingId(shipment.trackingId);
-      setFinalPrice(shipment.price);
-      toast.success("Shipment created successfully!");
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create payment order');
+
+      const { orderId, keyId } = orderData;
+      setPaymentStep('checkout');
+
+      // Step 2 — Load Razorpay checkout SDK and open modal
+      await new Promise<void>((resolve, reject) => {
+        // Load Razorpay script if not already loaded
+        if ((window as unknown as Record<string, unknown>).Razorpay) { resolve(); return; }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+        document.body.appendChild(script);
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rzp = new (window as any).Razorpay({
+          key: keyId,
+          amount: estimatedPrice * 100, // paise
+          currency: 'INR',
+          name: 'CourierHub',
+          description: `${PACKAGE_TYPE_LABELS[form.packageType]} — ${form.deliveryType === 'EXPRESS' ? 'Express' : 'Standard'} delivery`,
+          order_id: orderId,
+          theme: { color: '#f97316' }, // accent orange
+          prefill: {},
+          handler: async (response: {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              setPaymentStep('verifying');
+
+              // Step 3 — Create shipment in DB (with razorpayOrderId)
+              const shipment = await createShipment({
+                senderName: form.senderName,
+                senderAddress: form.senderAddress,
+                senderPhone: form.senderPhone || undefined,
+                receiverName: form.receiverName,
+                receiverAddress: form.receiverAddress,
+                receiverPhone: form.receiverPhone || undefined,
+                packageWeight: weightNum,
+                packageType: form.packageType,
+                deliveryType: form.deliveryType,
+                originCity: senderLocation?.city,
+                destinationCity: receiverLocation?.city,
+                razorpayOrderId: orderId,
+              });
+
+              // Step 4 — Verify payment signature server-side
+              const verifyRes = await fetch('/api/payments/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  shipmentId: shipment.id,
+                }),
+              });
+
+              if (!verifyRes.ok) throw new Error('Payment verification failed');
+
+              setTrackingId(shipment.trackingId);
+              setFinalPrice(shipment.price);
+              setPaymentStep('done');
+              toast.success('Payment successful! Shipment created.');
+              resolve();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'An error occurred after payment');
+              reject(err);
+            } finally {
+              setLoading(false);
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              setPaymentStep('idle');
+              setLoading(false);
+              reject(new Error('Payment cancelled'));
+            },
+          },
+        });
+        rzp.open();
+      });
     } catch (error) {
-      console.error("Error creating shipment:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to create shipment");
-    } finally {
+      if (error instanceof Error && error.message !== 'Payment cancelled') {
+        toast.error(error.message);
+      }
+      setPaymentStep('idle');
       setLoading(false);
     }
   };
@@ -466,13 +549,19 @@ export default function CreateShipment() {
             </div>
 
             <Button
-              onClick={handleCreateShipment}
+              onClick={handlePayAndCreate}
               disabled={!filled || loading}
               size="lg"
               className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow w-full sm:w-auto"
             >
               <Package className="mr-2 h-4 w-4" />
-              {loading ? "Creating..." : "Create Shipment"}
+              {loading
+                ? paymentStep === 'creating-order' ? 'Creating order…'
+                  : paymentStep === 'verifying' ? 'Verifying payment…'
+                  : 'Processing…'
+                : estimatedPrice
+                ? `Pay ₹${estimatedPrice.toLocaleString('en-IN')} & Ship`
+                : 'Pay & Create Shipment'}
             </Button>
           </div>
 

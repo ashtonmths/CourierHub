@@ -221,6 +221,7 @@ export async function createShipment(data: {
   isInsured?: boolean
   specialInstructions?: string
   estimatedDelivery?: Date
+  razorpayOrderId?: string  // Stored immediately; payment status updated after verification
 }) {
   const user = await currentUser()
   if (!user) throw new Error('Unauthorized: Please sign in to create a shipment')
@@ -288,6 +289,7 @@ export async function createShipment(data: {
         status: ShipmentStatus.ORDER_CREATED,
         estimatedDelivery,
         customerId,
+        razorpayOrderId: data.razorpayOrderId,
       },
     })
 
