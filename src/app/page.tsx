@@ -90,7 +90,7 @@ const Index = () => {
                 <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-glow">
                   <Link href={getDashboardUrl()}>
                     <LayoutDashboard className="mr-2 h-4 w-4" />
-                    Go to Dashboard
+                      Go to Dashboard
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>

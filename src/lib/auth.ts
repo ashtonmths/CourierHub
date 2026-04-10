@@ -50,7 +50,7 @@ export async function syncClerkUserToDatabase(
     lastName?: string | null
     phoneNumbers?: Array<{ phoneNumber: string }>
   },
-  role: UserRole = UserRole.CUSTOMER
+  role?: UserRole
 ) {
   const email = clerkUser.emailAddresses[0]?.emailAddress
   if (!email) throw new Error('No email found for user')
@@ -60,9 +60,16 @@ export async function syncClerkUserToDatabase(
   const name = `${firstName || ''} ${lastName || ''}`.trim() || 'User'
   const phone = clerkUser.phoneNumbers?.[0]?.phoneNumber || null
 
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkUserId: clerkUser.id },
+    select: { role: true },
+  })
+
   // Check if this is the admin email
   const isAdmin = email === process.env.ADMIN_EMAIL
-  const userRole = isAdmin ? UserRole.ADMIN : role
+  const userRole = isAdmin
+    ? UserRole.ADMIN
+    : role || existingUser?.role || UserRole.CUSTOMER
 
   // Upsert user in database
   const user = await prisma.user.upsert({
